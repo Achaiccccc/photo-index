@@ -1,0 +1,44 @@
+insertSetting:
+INSERT INTO setting(
+  id, provider, endpoint, model, thinkingEnabled, thinkingTokenLimit,
+  longEdge, jpegQuality, detailLevel, uploadMode, batchMaxBytes, batchMaxLines,
+  concurrentBatches, wifiOnly, chargingOnly, inputPricePerMillion, outputPricePerMillion,
+  matchMode, amountAlertYuan
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+selectSetting:
+SELECT
+  id, provider, endpoint, model, thinkingEnabled, thinkingTokenLimit,
+  longEdge, jpegQuality, detailLevel, uploadMode, batchMaxBytes, batchMaxLines,
+  concurrentBatches, wifiOnly, chargingOnly, inputPricePerMillion, outputPricePerMillion,
+  matchMode, amountAlertYuan
+FROM setting
+WHERE id = 1;
+
+countSetting:
+SELECT COUNT(*) AS rowCount
+FROM setting;
+
+updateSetting:
+UPDATE setting
+SET
+  provider = ?,
+  endpoint = ?,
+  model = ?,
+  thinkingEnabled = ?,
+  thinkingTokenLimit = ?,
+  longEdge = ?,
+  jpegQuality = ?,
+  detailLevel = ?,
+  uploadMode = ?,
+  batchMaxBytes = ?,
+  batchMaxLines = ?,
+  concurrentBatches = ?,
+  wifiOnly = ?,
+  chargingOnly = ?,
+  inputPricePerMillion = ?,
+  outputPricePerMillion = ?,
+  matchMode = ?,
+  amountAlertYuan = ?
+WHERE id = 1;

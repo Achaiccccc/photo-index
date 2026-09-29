@@ -25,7 +25,7 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            // 同一套打包版 SQLite，供 JVM 测试和 Android 使用。表结构在 T1 再建。
+            // 同一套打包版 SQLite，供 JVM 测试和 Android 使用。
             implementation(libs.sqlite.bundled)
             implementation(libs.sqldelight.runtime)
         }
@@ -36,5 +36,9 @@ kotlin {
 }
 
 sqldelight {
-    // 数据库声明留到 T1。这里只固定插件版本。
+    databases {
+        create("PhotoIndexDatabase") {
+            packageName.set("app.photoindex.storage")
+        }
+    }
 }

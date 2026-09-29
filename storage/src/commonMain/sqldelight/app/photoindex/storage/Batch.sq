@@ -1,0 +1,21 @@
+insertBatch:
+INSERT INTO batch(
+  id, configFingerprint, state, localPath, remoteFileId, remoteBatchId, outputFileId,
+  lineCount, byteSize, committedCount
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+selectBatchById:
+SELECT
+  id, configFingerprint, state, localPath, remoteFileId, remoteBatchId, outputFileId,
+  lineCount, byteSize, committedCount
+FROM batch
+WHERE id = ?;
+
+selectBatchesByState:
+SELECT
+  id, configFingerprint, state, localPath, remoteFileId, remoteBatchId, outputFileId,
+  lineCount, byteSize, committedCount
+FROM batch
+WHERE state = ?
+ORDER BY id;

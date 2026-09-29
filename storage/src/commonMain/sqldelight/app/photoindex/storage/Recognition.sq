@@ -1,0 +1,8 @@
+insertRecognition:
+INSERT INTO recognition(assetId, promptVersion, modelId, json, searchText)
+VALUES (?, ?, ?, ?, ?);
+
+selectRecognitionByAssetId:
+SELECT assetId, promptVersion, modelId, json, searchText
+FROM recognition
+WHERE assetId = ?;

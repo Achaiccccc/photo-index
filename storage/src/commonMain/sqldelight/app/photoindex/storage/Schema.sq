@@ -1,0 +1,112 @@
+CREATE TABLE source (
+  id TEXT NOT NULL PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('album', 'folder')),
+  systemKey TEXT NOT NULL,
+  displayName TEXT NOT NULL,
+  enabled INTEGER NOT NULL CHECK (enabled IN (0, 1))
+);
+
+CREATE TABLE batch (
+  id TEXT NOT NULL PRIMARY KEY,
+  configFingerprint TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN (
+    'packing', 'packed', 'uploading', 'uploaded', 'submitted',
+    'running', 'committing', 'completed', 'failed', 'cancelled', 'expired'
+  )),
+  localPath TEXT,
+  remoteFileId TEXT,
+  remoteBatchId TEXT,
+  outputFileId TEXT,
+  lineCount INTEGER NOT NULL,
+  byteSize INTEGER NOT NULL,
+  committedCount INTEGER NOT NULL
+);
+
+CREATE TABLE asset (
+  id TEXT NOT NULL PRIMARY KEY,
+  sourceId TEXT NOT NULL REFERENCES source(id),
+  systemId TEXT NOT NULL,
+  displayName TEXT NOT NULL,
+  relativePath TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  dateModified INTEGER NOT NULL,
+  dateTaken INTEGER,
+  contentHash TEXT,
+  status TEXT NOT NULL CHECK (status IN ('pending', 'in_batch', 'done', 'failed', 'out_of_scope')),
+  batchId TEXT REFERENCES batch(id),
+  configFingerprint TEXT NOT NULL,
+  attemptCount INTEGER NOT NULL,
+  lastError TEXT,
+  actualInputTokens INTEGER,
+  actualOutputTokens INTEGER
+);
+
+CREATE INDEX asset_by_status ON asset(status);
+
+CREATE INDEX asset_by_batch ON asset(batchId);
+
+CREATE INDEX asset_by_source ON asset(sourceId);
+
+CREATE TABLE recognition (
+  assetId TEXT NOT NULL PRIMARY KEY REFERENCES asset(id),
+  promptVersion TEXT NOT NULL,
+  modelId TEXT NOT NULL,
+  json TEXT NOT NULL,
+  searchText TEXT NOT NULL
+);
+
+CREATE TABLE user_edit (
+  assetId TEXT NOT NULL PRIMARY KEY REFERENCES asset(id),
+  addedTerms TEXT NOT NULL,
+  suppressedTerms TEXT NOT NULL
+);
+
+-- 全局只能有一行。
+CREATE TABLE job (
+  id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
+  state TEXT NOT NULL CHECK (state IN ('idle', 'running', 'paused')),
+  wifiOnly INTEGER NOT NULL CHECK (wifiOnly IN (0, 1)),
+  chargingOnly INTEGER NOT NULL CHECK (chargingOnly IN (0, 1))
+);
+
+INSERT INTO job (id, state, wifiOnly, chargingOnly)
+VALUES (1, 'idle', 1, 1);
+
+-- 不含 API Key。密钥只进 Android 加密存储。
+CREATE TABLE setting (
+  id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
+  provider TEXT NOT NULL CHECK (provider IN ('qwen', 'doubao', 'zhipu', 'gemini', 'custom')),
+  endpoint TEXT NOT NULL,
+  model TEXT NOT NULL,
+  thinkingEnabled INTEGER NOT NULL CHECK (thinkingEnabled IN (0, 1)),
+  thinkingTokenLimit INTEGER NOT NULL CHECK (thinkingTokenLimit > 0),
+  longEdge INTEGER CHECK (longEdge IS NULL OR longEdge IN (512, 768, 1280, 1600)),
+  jpegQuality INTEGER NOT NULL CHECK (jpegQuality BETWEEN 60 AND 90),
+  detailLevel TEXT NOT NULL CHECK (detailLevel IN ('brief', 'detailed')),
+  uploadMode TEXT NOT NULL CHECK (uploadMode IN ('batch_file', 'realtime')),
+  batchMaxBytes INTEGER NOT NULL CHECK (batchMaxBytes > 0),
+  batchMaxLines INTEGER NOT NULL CHECK (batchMaxLines BETWEEN 1 AND 10000),
+  concurrentBatches INTEGER NOT NULL CHECK (concurrentBatches BETWEEN 1 AND 2),
+  wifiOnly INTEGER NOT NULL CHECK (wifiOnly IN (0, 1)),
+  chargingOnly INTEGER NOT NULL CHECK (chargingOnly IN (0, 1)),
+  inputPricePerMillion REAL NOT NULL CHECK (inputPricePerMillion >= 0),
+  outputPricePerMillion REAL NOT NULL CHECK (outputPricePerMillion >= 0),
+  matchMode TEXT NOT NULL CHECK (matchMode IN ('any', 'all')),
+  amountAlertYuan REAL NOT NULL CHECK (amountAlertYuan >= 0)
+);
+
+INSERT INTO setting (
+  id, provider, endpoint, model, thinkingEnabled, thinkingTokenLimit,
+  longEdge, jpegQuality, detailLevel, uploadMode, batchMaxBytes, batchMaxLines,
+  concurrentBatches, wifiOnly, chargingOnly, inputPricePerMillion, outputPricePerMillion,
+  matchMode, amountAlertYuan
+) VALUES (
+  1, 'qwen', 'https://dashscope.aliyuncs.com/compatible-mode/v1', 'qwen3-vl-flash',
+  0, 1024,
+  1280, 80, 'detailed', 'batch_file', 419430400, 2000,
+  1, 1, 1, 0.15, 1.5,
+  'any', 5
+);
+
+sqliteVersion:
+SELECT sqlite_version() AS version;

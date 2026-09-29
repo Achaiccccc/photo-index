@@ -1,0 +1,8 @@
+insertUserEdit:
+INSERT INTO user_edit(assetId, addedTerms, suppressedTerms)
+VALUES (?, ?, ?);
+
+selectUserEditByAssetId:
+SELECT assetId, addedTerms, suppressedTerms
+FROM user_edit
+WHERE assetId = ?;

@@ -1,0 +1,33 @@
+insertAsset:
+INSERT INTO asset(
+  id, sourceId, systemId, displayName, relativePath, size, dateModified, dateTaken,
+  contentHash, status, batchId, configFingerprint, attemptCount, lastError,
+  actualInputTokens, actualOutputTokens
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+selectAssetById:
+SELECT
+  id, sourceId, systemId, displayName, relativePath, size, dateModified, dateTaken,
+  contentHash, status, batchId, configFingerprint, attemptCount, lastError,
+  actualInputTokens, actualOutputTokens
+FROM asset
+WHERE id = ?;
+
+selectAssetsByBatchId:
+SELECT
+  id, sourceId, systemId, displayName, relativePath, size, dateModified, dateTaken,
+  contentHash, status, batchId, configFingerprint, attemptCount, lastError,
+  actualInputTokens, actualOutputTokens
+FROM asset
+WHERE batchId = ?
+ORDER BY id;
+
+selectAssetsByStatus:
+SELECT
+  id, sourceId, systemId, displayName, relativePath, size, dateModified, dateTaken,
+  contentHash, status, batchId, configFingerprint, attemptCount, lastError,
+  actualInputTokens, actualOutputTokens
+FROM asset
+WHERE status = ?
+ORDER BY id;

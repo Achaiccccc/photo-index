@@ -1,0 +1,8 @@
+insertSource:
+INSERT INTO source(id, kind, systemKey, displayName, enabled)
+VALUES (?, ?, ?, ?, ?);
+
+selectSourceById:
+SELECT id, kind, systemKey, displayName, enabled
+FROM source
+WHERE id = ?;

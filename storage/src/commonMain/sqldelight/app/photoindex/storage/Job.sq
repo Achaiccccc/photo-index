@@ -1,0 +1,17 @@
+insertJob:
+INSERT INTO job(id, state, wifiOnly, chargingOnly)
+VALUES (?, ?, ?, ?);
+
+selectJob:
+SELECT id, state, wifiOnly, chargingOnly
+FROM job
+WHERE id = 1;
+
+countJob:
+SELECT COUNT(*) AS rowCount
+FROM job;
+
+updateJob:
+UPDATE job
+SET state = ?, wifiOnly = ?, chargingOnly = ?
+WHERE id = 1;
