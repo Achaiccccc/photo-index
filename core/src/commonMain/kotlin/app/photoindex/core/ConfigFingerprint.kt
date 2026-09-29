@@ -1,7 +1,7 @@
 package app.photoindex.core
 
 /**
- * 提示词正文在 T3 定义。改提示词时递增这个版本，已识别的图才会因指纹变化而需要重跑。
+ * 提示词正文在 [recognitionPrompt]。改提示词时递增这个版本，已识别的图才会因指纹变化而需要重跑。
  */
 const val PROMPT_VERSION = "1"
 
