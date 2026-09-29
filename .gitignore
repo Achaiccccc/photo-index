@@ -1,1 +1,25 @@
+# 文档暂不入库（原有约定）
 doc/
+
+# 构建产物
+.gradle/
+build/
+.kotlin/
+.idea/
+*.iml
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.ap_
+*.hprof
+
+# 本地密钥
+*.keystore
+*.jks
+keystore.properties
+secrets.properties
+*.env
+google-services.json

@@ -1,0 +1,28 @@
+[versions]
+kotlin = "2.4.10"
+agp = "9.1.1"
+sqldelight = "2.4.0"
+# 打包版 SQLite。JVM 测试与 Android 使用同一产物，不用系统自带库。后续节点不升级。
+sqlite = "2.7.1"
+composeBom = "2026.06.01"
+activityCompose = "1.13.0"
+compileSdk = "36"
+compileSdkMinor = "1"
+minSdk = "26"
+targetSdk = "36"
+buildTools = "36.1.0"
+
+[libraries]
+sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "sqlite" }
+sqldelight-runtime = { module = "app.cash.sqldelight:runtime", version.ref = "sqldelight" }
+compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+compose-ui = { module = "androidx.compose.ui:ui" }
+compose-material3 = { module = "androidx.compose.material3:material3" }
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+
+[plugins]
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-kmp-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
