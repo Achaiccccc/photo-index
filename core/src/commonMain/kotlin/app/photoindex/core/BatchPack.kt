@@ -7,7 +7,8 @@ import kotlin.io.encoding.Base64
  * 调用方每次只提供下一张图片的 ID，打包器不接收已经全部放进内存的图片列表。
  * 压缩结果用完即关，同一时刻只向压缩器要一张。
  * 达到行数或体积上限就封口；没封口的半截文件不写入数据库。
- * 上传、查询和进程恢复由批状态机驱动。真图片解码是 T8。
+ * 上传、查询和进程恢复由批状态机驱动。
+ * 真机解码、去掉定位信息由 JpegCompressor 完成；打包测试仍使用这里的假压缩器。
  */
 fun interface PendingImageSource {
     fun nextId(): String?
