@@ -7,7 +7,7 @@ import kotlin.io.encoding.Base64
  * 调用方每次只提供下一张图片的 ID，打包器不接收已经全部放进内存的图片列表。
  * 压缩结果用完即关，同一时刻只向压缩器要一张。
  * 达到行数或体积上限就封口；没封口的半截文件不写入数据库。
- * 上传和进程恢复是 T6，真图片解码是 T8。
+ * 上传、查询和进程恢复由批状态机驱动。真图片解码是 T8。
  */
 fun interface PendingImageSource {
     fun nextId(): String?
@@ -36,6 +36,12 @@ fun interface BatchFileSinkFactory {
 }
 
 interface BatchLedger {
+    /**
+     * 打开批文件时记下「还在写」。状态机靠这行在封口前被杀掉之后删掉半截文件。
+     * 不覆盖时什么都不记，半截文件不进库。
+     */
+    fun beginPacking(batchId: String, configFingerprint: String, localPath: String) {}
+
     fun seal(batch: SealedBatchDraft)
     fun markLineTooLarge(assetId: String, reason: String)
 }
@@ -191,6 +197,8 @@ fun packImageBatch(
                     fingerprint = config.configFingerprint,
                     sink = files.open(batchId),
                 )
+                current = open
+                ledger.beginPacking(batchId, config.configFingerprint, open.sink.path)
             }
             current = open
             open.append(prepared)

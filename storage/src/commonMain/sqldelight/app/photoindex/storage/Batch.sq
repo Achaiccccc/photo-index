@@ -26,3 +26,62 @@ SELECT
   lineCount, byteSize, committedCount
 FROM batch
 ORDER BY id;
+
+sealPackingBatch:
+UPDATE batch
+SET state = 'packed', localPath = ?, lineCount = ?, byteSize = ?
+WHERE id = ? AND state = 'packing';
+
+markBatchUploading:
+UPDATE batch
+SET state = 'uploading'
+WHERE id = ? AND state IN ('packed', 'uploading');
+
+markBatchUploaded:
+UPDATE batch
+SET state = 'uploaded', remoteFileId = ?, localPath = NULL
+WHERE id = ?;
+
+markBatchSubmitted:
+UPDATE batch
+SET state = 'submitted', remoteBatchId = ?
+WHERE id = ?;
+
+markBatchRunning:
+UPDATE batch
+SET state = 'running'
+WHERE id = ?;
+
+markBatchCommitting:
+UPDATE batch
+SET state = 'committing', outputFileId = ?, localPath = ?
+WHERE id = ?;
+
+updateCommittedCount:
+UPDATE batch
+SET committedCount = ?
+WHERE id = ?;
+
+markBatchTerminal:
+UPDATE batch
+SET state = ?, localPath = NULL
+WHERE id = ?;
+
+clearBatchLocalPath:
+UPDATE batch
+SET localPath = NULL
+WHERE id = ?;
+
+clearBatchRemoteFile:
+UPDATE batch
+SET remoteFileId = NULL
+WHERE id = ?;
+
+clearBatchOutputFile:
+UPDATE batch
+SET outputFileId = NULL
+WHERE id = ?;
+
+deleteBatch:
+DELETE FROM batch
+WHERE id = ?;

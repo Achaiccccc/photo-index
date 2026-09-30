@@ -4,7 +4,7 @@ internal sealed interface JsonValue {
     data class Obj(val fields: Map<String, JsonValue>) : JsonValue
     data class Arr(val items: List<JsonValue>) : JsonValue
     data class Str(val value: String) : JsonValue
-    data object Num : JsonValue
+    data class Num(val literal: String) : JsonValue
     data object Bool : JsonValue
     data object Null : JsonValue
 }
@@ -39,10 +39,7 @@ private class JsonCursor(private val text: String) {
             't' -> literal("true", JsonValue.Bool)
             'f' -> literal("false", JsonValue.Bool)
             'n' -> literal("null", JsonValue.Null)
-            '-', in '0'..'9' -> {
-                parseNumber()
-                JsonValue.Num
-            }
+            '-', in '0'..'9' -> JsonValue.Num(parseNumber())
             else -> fail()
         }
     }
@@ -149,7 +146,8 @@ private class JsonCursor(private val text: String) {
         return code
     }
 
-    private fun parseNumber() {
+    private fun parseNumber(): String {
+        val start = pos
         if (peek() == '-') pos++
         if (eof()) fail()
         when {
@@ -168,6 +166,7 @@ private class JsonCursor(private val text: String) {
             if (eof() || peek() !in '0'..'9') fail()
             while (!eof() && peek() in '0'..'9') pos++
         }
+        return text.substring(start, pos)
     }
 
     private fun literal(word: String, value: JsonValue): JsonValue {

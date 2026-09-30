@@ -11,3 +11,8 @@ updateRecognitionSearchText:
 UPDATE recognition
 SET searchText = ?
 WHERE assetId = ?;
+
+replaceRecognition:
+UPDATE recognition
+SET promptVersion = ?, modelId = ?, json = ?, searchText = ?
+WHERE assetId = ?;

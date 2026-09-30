@@ -58,3 +58,43 @@ SET
   batchId = NULL,
   attemptCount = attemptCount + 1
 WHERE id = :id AND status = 'pending';
+
+markAssetDone:
+UPDATE asset
+SET
+  status = 'done',
+  lastError = NULL,
+  actualInputTokens = :actualInputTokens,
+  actualOutputTokens = :actualOutputTokens
+WHERE id = :id AND status = 'in_batch';
+
+markInBatchAssetFailed:
+UPDATE asset
+SET
+  status = 'failed',
+  lastError = :lastError,
+  attemptCount = attemptCount + 1
+WHERE id = :id AND status = 'in_batch';
+
+resetBatchAssetsToPending:
+UPDATE asset
+SET
+  status = 'pending',
+  batchId = NULL,
+  contentHash = NULL,
+  configFingerprint = '',
+  lastError = NULL
+WHERE batchId = :batchId AND status = 'in_batch';
+
+requeueFailedAssets:
+UPDATE asset
+SET
+  status = 'pending',
+  batchId = NULL,
+  lastError = NULL
+WHERE status = 'failed';
+
+countPending:
+SELECT COUNT(*) AS pendingCount
+FROM asset
+WHERE status = 'pending';
