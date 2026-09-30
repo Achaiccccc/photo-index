@@ -31,3 +31,30 @@ SELECT
 FROM asset
 WHERE status = ?
 ORDER BY id;
+
+-- 一次只取下一张待处理图片，避免把整库 ID 装进内存。
+selectNextPendingId:
+SELECT id
+FROM asset
+WHERE status = 'pending' AND id > :afterId
+ORDER BY id
+LIMIT 1;
+
+markAssetInBatch:
+UPDATE asset
+SET
+  status = 'in_batch',
+  batchId = :batchId,
+  contentHash = :contentHash,
+  configFingerprint = :configFingerprint,
+  lastError = NULL
+WHERE id = :id AND status = 'pending';
+
+markAssetFailed:
+UPDATE asset
+SET
+  status = 'failed',
+  lastError = :lastError,
+  batchId = NULL,
+  attemptCount = attemptCount + 1
+WHERE id = :id AND status = 'pending';

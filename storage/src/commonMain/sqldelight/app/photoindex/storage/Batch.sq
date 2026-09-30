@@ -19,3 +19,10 @@ SELECT
 FROM batch
 WHERE state = ?
 ORDER BY id;
+
+selectAllBatches:
+SELECT
+  id, configFingerprint, state, localPath, remoteFileId, remoteBatchId, outputFileId,
+  lineCount, byteSize, committedCount
+FROM batch
+ORDER BY id;
