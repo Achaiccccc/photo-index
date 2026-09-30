@@ -1,13 +1,15 @@
 package app.photoindex.core
 
 /**
- * 服务商侧一次批量任务的查询结果。下载用 [outputFileId]，不在这里带结果正文。
+ * 服务商侧一次批量任务的查询结果。下载用文件 ID，不在这里带结果正文。
+ * [outputFileId] 是成功行，[errorFileId] 是失败行。两边都要落进同一个本地结果文件。
  * 已经有任务 ID 时，查询失败也不能当成「还没上传」。
  */
 data class RemoteBatch(
     val phase: RemoteBatchPhase,
     val outputFileId: String?,
     val error: String?,
+    val errorFileId: String? = null,
 )
 
 enum class RemoteBatchPhase {

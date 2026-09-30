@@ -93,8 +93,8 @@ class BatchIndexing(
             }
             provider.cancel(taskId)
             val remote = provider.query(taskId)
-            if (remote.outputFileId != null) {
-                download(batch.id, remote.outputFileId)
+            if (remote.outputFileId != null || remote.errorFileId != null) {
+                download(batch.id, remote)
                 if (!commitFile(batch.id, MissingLinePolicy.LEAVE)) return
             }
             catalog.resetInBatchToPending(batch.id)
@@ -192,30 +192,30 @@ class BatchIndexing(
         when (remote.phase) {
             RemoteBatchPhase.RUNNING -> catalog.markRunning(batch.id)
             RemoteBatchPhase.COMPLETED -> {
-                download(batch.id, remote.outputFileId ?: error("完成的批 ${batch.id} 没有结果文件"))
+                download(batch.id, remote)
                 if (!commitFile(batch.id, MissingLinePolicy.FAIL)) return
                 failLeftovers(batch.id, "结果里没有这张图")
                 finish(batch.id, BatchState.COMPLETED, stopQueue = false)
             }
             RemoteBatchPhase.FAILED -> {
-                if (remote.outputFileId != null) {
-                    download(batch.id, remote.outputFileId)
+                if (remote.outputFileId != null || remote.errorFileId != null) {
+                    download(batch.id, remote)
                     if (!commitFile(batch.id, MissingLinePolicy.FAIL)) return
                 }
                 failLeftovers(batch.id, remote.error ?: "批量任务失败")
                 finish(batch.id, BatchState.FAILED, stopQueue = true)
             }
             RemoteBatchPhase.EXPIRED -> {
-                if (remote.outputFileId != null) {
-                    download(batch.id, remote.outputFileId)
+                if (remote.outputFileId != null || remote.errorFileId != null) {
+                    download(batch.id, remote)
                     if (!commitFile(batch.id, MissingLinePolicy.LEAVE)) return
                 }
                 catalog.resetInBatchToPending(batch.id)
                 finish(batch.id, BatchState.EXPIRED, stopQueue = true)
             }
             RemoteBatchPhase.CANCELLED -> {
-                if (remote.outputFileId != null) {
-                    download(batch.id, remote.outputFileId)
+                if (remote.outputFileId != null || remote.errorFileId != null) {
+                    download(batch.id, remote)
                     if (!commitFile(batch.id, MissingLinePolicy.LEAVE)) return
                 }
                 catalog.resetInBatchToPending(batch.id)
@@ -224,10 +224,32 @@ class BatchIndexing(
         }
     }
 
-    private fun download(batchId: String, outputFileId: String) {
+    /**
+     * 成功行和失败行合成一个本地结果文件，再交给入库。
+     * 两边都有时，失败文件在本地写好后就删掉远端副本；输入文件和成功文件仍等入库结束后再删。
+     * 进程若死在写完之前，恢复只认库里记下的那一个文件 ID。
+     */
+    private fun download(batchId: String, remote: RemoteBatch) {
+        val storedId = remote.outputFileId ?: remote.errorFileId ?: error("批 $batchId 没有结果文件")
         val path = workspace.resultPath(batchId)
-        catalog.markCommitting(batchId, outputFileId, path)
-        if (!workspace.exists(path)) provider.download(outputFileId, path)
+        catalog.markCommitting(batchId, storedId, path)
+        if (workspace.exists(path)) return
+        val lines = mutableListOf<String>()
+        remote.outputFileId?.let { lines += pull(it, "$path.output") }
+        if (remote.errorFileId != null && remote.errorFileId != remote.outputFileId) {
+            lines += pull(remote.errorFileId, "$path.error")
+        }
+        workspace.writeLines(path, lines)
+        if (remote.outputFileId != null && remote.errorFileId != null) {
+            provider.deleteRemoteFile(remote.errorFileId)
+        }
+    }
+
+    private fun pull(fileId: String, partPath: String): List<String> {
+        provider.download(fileId, partPath)
+        val lines = workspace.readLines(partPath)
+        workspace.deleteIfExists(partPath)
+        return lines
     }
 
     /**
@@ -461,6 +483,7 @@ interface BatchWorkspace {
     fun deleteIfExists(path: String)
     fun exists(path: String): Boolean
     fun readLines(path: String): List<String>
+    fun writeLines(path: String, lines: List<String>)
     fun resultPath(batchId: String): String
 }
 

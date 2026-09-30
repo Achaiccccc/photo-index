@@ -24,6 +24,12 @@ class DirectoryBatchWorkspace(
 
     override fun readLines(path: String): List<String> = File(path).readLines()
 
+    override fun writeLines(path: String, lines: List<String>) {
+        val file = File(path)
+        file.parentFile?.mkdirs()
+        file.writeText(lines.joinToString("\n"))
+    }
+
     override fun resultPath(batchId: String): String {
         directory.mkdirs()
         return File(directory, "$batchId.result.jsonl").absolutePath

@@ -25,14 +25,35 @@ import kotlin.test.assertTrue
 /**
  * 每个场景都先跑一个状态机，再对同一个库新建第二个实例。
  * 恢复要靠库里的行，不能靠上一个对象还活着。
+ * 子类把 [createProvider] 换成千问适配器加本机假 HTTP，再跑同一张恢复表。
  */
-class 批状态机与中断恢复 {
+open class 批状态机与中断恢复 {
+    private val opened = mutableListOf<AutoCloseable>()
+
+    protected open fun createProvider(
+        phase: RemoteBatchPhase = RemoteBatchPhase.COMPLETED,
+        resultText: String = "",
+    ): TrackedProvider = MemoryProvider(phase = phase, resultText = resultText)
+
+    protected fun openProvider(
+        phase: RemoteBatchPhase = RemoteBatchPhase.COMPLETED,
+        resultText: String = "",
+    ): TrackedProvider {
+        val provider = createProvider(phase, resultText)
+        opened += provider
+        return provider
+    }
+
+    protected fun track(provider: TrackedProvider): TrackedProvider {
+        opened += provider
+        return provider
+    }
     @Test
     fun 封口前被杀() {
         scenario { database, directory ->
             database.insertAlbum()
             listOf("p1", "p2").forEach { database.insertAsset(it) }
-            val firstProvider = RecordingProvider()
+            val firstProvider = openProvider()
             val ids = batchIds()
             indexing(
                 database = database,
@@ -47,7 +68,7 @@ class 批状态机与中断恢复 {
             assertEquals(1, jsonlFiles(directory).size)
             assertTrue(firstProvider.calls.isEmpty())
 
-            val secondProvider = RecordingProvider()
+            val secondProvider = openProvider()
             indexing(
                 database = database,
                 directory = directory,
@@ -76,7 +97,7 @@ class 批状态机与中断恢复 {
             indexing(
                 database = database,
                 directory = directory,
-                provider = RecordingProvider(phase = RemoteBatchPhase.RUNNING),
+                provider = openProvider(phase = RemoteBatchPhase.RUNNING),
                 compressor = FixedCompressor(),
                 newBatchId = ids,
                 control = BatchRunControl(stopAfterSeal = true),
@@ -92,7 +113,7 @@ class 批状态机与中断恢复 {
                 assertEquals("in_batch", database.assetQueries.selectAssetById(id).executeAsOne().status)
             }
 
-            val provider = RecordingProvider(phase = RemoteBatchPhase.RUNNING)
+            val provider = openProvider(phase = RemoteBatchPhase.RUNNING)
             indexing(
                 database = database,
                 directory = directory,
@@ -121,7 +142,7 @@ class 批状态机与中断恢复 {
             indexing(
                 database = database,
                 directory = directory,
-                provider = RecordingProvider(phase = RemoteBatchPhase.RUNNING),
+                provider = openProvider(phase = RemoteBatchPhase.RUNNING),
                 compressor = FixedCompressor(),
                 newBatchId = ids,
                 control = BatchRunControl(stopAfterUpload = true),
@@ -132,7 +153,7 @@ class 批状态机与中断恢复 {
             assertEquals("file-1", uploaded.remoteFileId)
             assertNull(uploaded.remoteBatchId)
 
-            val provider = RecordingProvider(phase = RemoteBatchPhase.RUNNING)
+            val provider = openProvider(phase = RemoteBatchPhase.RUNNING)
             indexing(
                 database = database,
                 directory = directory,
@@ -159,7 +180,7 @@ class 批状态机与中断恢复 {
             indexing(
                 database = database,
                 directory = directory,
-                provider = RecordingProvider(phase = RemoteBatchPhase.RUNNING),
+                provider = openProvider(phase = RemoteBatchPhase.RUNNING),
                 compressor = FixedCompressor(),
                 newBatchId = ids,
                 control = BatchRunControl(stopAfterSubmit = true),
@@ -169,7 +190,7 @@ class 批状态机与中断恢复 {
             assertEquals(BatchState.SUBMITTED, submitted.state)
             assertEquals("task-1", submitted.remoteBatchId)
 
-            val provider = RecordingProvider(
+            val provider = openProvider(
                 phase = RemoteBatchPhase.COMPLETED,
                 resultText = resultLines("p1", "p2"),
             )
@@ -200,7 +221,7 @@ class 批状态机与中断恢复 {
             indexing(
                 database = database,
                 directory = directory,
-                provider = RecordingProvider(resultText = results),
+                provider = openProvider(resultText = results),
                 compressor = FixedCompressor(),
                 newBatchId = ids,
                 control = BatchRunControl(commitChunkSize = 2, stopAfterCommitChunks = 1),
@@ -226,7 +247,7 @@ class 批状态机与中断恢复 {
                 )
             }
 
-            val provider = RecordingProvider(resultText = results)
+            val provider = openProvider(resultText = results)
             indexing(
                 database = database,
                 directory = directory,
@@ -253,7 +274,7 @@ class 批状态机与中断恢复 {
         scenario { database, directory ->
             database.insertAlbum()
             listOf("p1", "p2", "p3").forEach { database.insertAsset(it) }
-            val provider = RecordingProvider(
+            val provider = openProvider(
                 resultText = listOf(
                     successfulBatchResultLine("p1", modelJson("风景"), 10, 4),
                     failedBatchResultLine("p2", "看不清"),
@@ -291,7 +312,7 @@ class 批状态机与中断恢复 {
             indexing(
                 database = database,
                 directory = directory,
-                provider = RecordingProvider(phase = RemoteBatchPhase.RUNNING),
+                provider = openProvider(phase = RemoteBatchPhase.RUNNING),
                 compressor = FixedCompressor(),
                 newBatchId = ids,
             ).start()
@@ -299,7 +320,7 @@ class 批状态机与中断恢复 {
             assertEquals(BatchState.RUNNING, database.batchQueries.selectAllBatches().executeAsOne().state)
             listOf("p3", "p4").forEach { database.insertAsset(it) }
 
-            val provider = RecordingProvider(resultText = resultLines("p1", "p2"))
+            val provider = openProvider(resultText = resultLines("p1", "p2"))
             indexing(
                 database = database,
                 directory = directory,
@@ -332,12 +353,12 @@ class 批状态机与中断恢复 {
             indexing(
                 database = database,
                 directory = directory,
-                provider = RecordingProvider(phase = RemoteBatchPhase.RUNNING),
+                provider = openProvider(phase = RemoteBatchPhase.RUNNING),
                 compressor = FixedCompressor(),
                 newBatchId = ids,
             ).start()
 
-            val provider = RecordingProvider(
+            val provider = openProvider(
                 phase = RemoteBatchPhase.CANCELLED,
                 resultText = successfulBatchResultLine("p1", modelJson("已经跑完"), 8, 3),
             )
@@ -359,7 +380,7 @@ class 批状态机与中断恢复 {
             assertNull(unfinished.batchId)
             assertEquals(0L, unfinished.attemptCount)
 
-            val again = RecordingProvider()
+            val again = openProvider()
             indexing(
                 database = database,
                 directory = directory,
@@ -381,7 +402,7 @@ class 批状态机与中断恢复 {
             val fingerprint = defaultRecognitionSettings().fingerprint()
             database.insertAsset(id = "already", status = "done", fingerprint = fingerprint)
             database.insertAsset(id = "fresh")
-            val provider = RecordingProvider(resultText = resultLines("fresh"))
+            val provider = openProvider(resultText = resultLines("fresh"))
             indexing(
                 database = database,
                 directory = directory,
@@ -408,7 +429,7 @@ class 批状态机与中断恢复 {
             database.insertAsset(id = "already", status = "done", fingerprint = fingerprint)
             database.insertAsset(id = "bad-1", status = "failed")
             database.insertAsset(id = "bad-2", status = "failed")
-            val provider = RecordingProvider(resultText = resultLines("bad-1", "bad-2"))
+            val provider = openProvider(resultText = resultLines("bad-1", "bad-2"))
             indexing(
                 database = database,
                 directory = directory,
@@ -448,7 +469,7 @@ class 批状态机与中断恢复 {
                 addedTerms = "手冲",
                 suppressedTerms = "错误作者",
             )
-            val provider = RecordingProvider(
+            val provider = openProvider(
                 resultText = successfulBatchResultLine(
                     customId = "p1",
                     modelJson = ModelRecord(summary = "风景 错误作者").toStableJson(),
@@ -483,18 +504,23 @@ class 批状态机与中断恢复 {
         }
     }
 
-    private fun scenario(block: (PhotoIndexDatabase, File) -> Unit) {
+    protected fun scenario(block: (PhotoIndexDatabase, File) -> Unit) {
         val directory = Files.createTempDirectory("photo-index-t6").toFile()
-        val opened = openPhotoIndexDatabase()
+        val openedDatabase = openPhotoIndexDatabase()
         try {
-            block(opened.database, directory)
+            block(openedDatabase.database, directory)
         } finally {
-            opened.close()
-            directory.deleteRecursively()
+            try {
+                opened.forEach { it.close() }
+            } finally {
+                opened.clear()
+                openedDatabase.close()
+                directory.deleteRecursively()
+            }
         }
     }
 
-    private fun indexing(
+    protected fun indexing(
         database: PhotoIndexDatabase,
         directory: File,
         provider: BatchProvider,
@@ -516,21 +542,21 @@ class 批状态机与中断恢复 {
         control = control,
     )
 
-    private fun batchIds(): () -> String {
+    protected fun batchIds(): () -> String {
         var number = 0
         return { "batch-${++number}" }
     }
 
-    private fun resultLines(vararg assetIds: String): String = assetIds.joinToString("\n") { id ->
+    protected fun resultLines(vararg assetIds: String): String = assetIds.joinToString("\n") { id ->
         successfulBatchResultLine(id, modelJson("风景"), 9, 4)
     }
 
-    private fun modelJson(summary: String): String = ModelRecord(summary = summary).toStableJson()
+    protected fun modelJson(summary: String): String = ModelRecord(summary = summary).toStableJson()
 
     private fun jsonlFiles(directory: File): List<File> =
         directory.listFiles()?.filter { it.isFile && it.name.endsWith(".jsonl") }.orEmpty()
 
-    private fun PhotoIndexDatabase.insertAlbum() {
+    protected fun PhotoIndexDatabase.insertAlbum() {
         sourceQueries.insertSource(
             id = "album-1",
             kind = "album",
@@ -540,7 +566,7 @@ class 批状态机与中断恢复 {
         )
     }
 
-    private fun PhotoIndexDatabase.insertAsset(
+    protected fun PhotoIndexDatabase.insertAsset(
         id: String,
         status: String = "pending",
         fingerprint: String = "",
@@ -567,49 +593,59 @@ class 批状态机与中断恢复 {
     }
 }
 
-private class RecordingProvider(
+private class MemoryProvider(
     var phase: RemoteBatchPhase = RemoteBatchPhase.COMPLETED,
     var resultText: String = "",
     private val fileId: String = "file-1",
     private val taskId: String = "task-1",
     private val outputFileId: String? = "out-1",
-) : BatchProvider {
-    val calls = mutableListOf<String>()
-    val uploaded = mutableListOf<String>()
-    val createdFrom = mutableListOf<String>()
+) : TrackedProvider {
+    private val callLog = mutableListOf<String>()
+    private val uploadedPaths = mutableListOf<String>()
+    private val createdFileIds = mutableListOf<String>()
+    override val calls: List<String> get() = callLog
+    override val uploaded: List<String> get() = uploadedPaths
+    override val createdFrom: List<String> get() = createdFileIds
 
     override fun upload(localPath: String): String {
-        calls += "upload"
-        uploaded += localPath
+        callLog += "upload"
+        uploadedPaths += localPath
         return fileId
     }
 
     override fun createTask(remoteFileId: String): String {
-        calls += "create"
-        createdFrom += remoteFileId
+        callLog += "create"
+        createdFileIds += remoteFileId
         return taskId
     }
 
     override fun query(remoteBatchId: String): RemoteBatch {
-        calls += "query"
+        callLog += "query"
         return RemoteBatch(phase = phase, outputFileId = outputFileId, error = null)
     }
 
     override fun download(outputFileId: String, destinationPath: String) {
-        calls += "download"
+        callLog += "download"
         File(destinationPath).writeText(resultText)
     }
 
     override fun cancel(remoteBatchId: String) {
-        calls += "cancel"
+        callLog += "cancel"
     }
 
     override fun deleteRemoteFile(remoteFileId: String) {
-        calls += "delete"
+        callLog += "delete"
     }
 }
 
-private class FixedCompressor : ImageCompressor {
+interface TrackedProvider : BatchProvider, AutoCloseable {
+    val calls: List<String>
+    val uploaded: List<String>
+    val createdFrom: List<String>
+    override fun close() = Unit
+}
+
+internal class FixedCompressor : ImageCompressor {
     override fun compress(assetId: String, jpegQuality: Int): CompressedJpeg = object : CompressedJpeg {
         override val bytes: ByteArray = byteArrayOf(1, 2, 3)
         override val widthPx: Int = 32
@@ -618,7 +654,7 @@ private class FixedCompressor : ImageCompressor {
     }
 }
 
-private class ThrowingCompressor : ImageCompressor {
+internal class ThrowingCompressor : ImageCompressor {
     override fun compress(assetId: String, jpegQuality: Int): CompressedJpeg {
         error("恢复时不应该重新压缩")
     }
