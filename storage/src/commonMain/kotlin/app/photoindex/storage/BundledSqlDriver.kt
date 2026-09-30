@@ -84,6 +84,19 @@ internal class BundledSqlDriver(
         connection.close()
     }
 
+    fun selectTexts(sql: String, binds: List<String> = emptyList()): List<String> {
+        connection.prepare(sql).use { statement ->
+            binds.forEachIndexed { index, value ->
+                statement.bindText(index + 1, value)
+            }
+            val rows = mutableListOf<String>()
+            while (statement.step()) {
+                if (!statement.isNull(0)) rows += statement.getText(0)
+            }
+            return rows
+        }
+    }
+
     private fun changes(): Long {
         connection.prepare("SELECT changes()").use { statement ->
             check(statement.step()) { "changes() 没有返回结果" }

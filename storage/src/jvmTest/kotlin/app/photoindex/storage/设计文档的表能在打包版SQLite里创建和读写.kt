@@ -1,5 +1,6 @@
 ﻿package app.photoindex.storage
 
+import app.photoindex.core.DEFAULT_SYNONYM_TABLE
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -293,6 +294,7 @@ class 设计文档的表能在打包版SQLite里创建和读写 {
         assertClose(1.5, setting.outputPricePerMillion)
         assertEquals("any", setting.matchMode)
         assertClose(5.0, setting.amountAlertYuan)
+        assertEquals(DEFAULT_SYNONYM_TABLE, setting.synonyms)
         assertEquals(1L, settingQueries.countSetting().executeAsOne())
 
         assertWriteFails {
@@ -316,6 +318,7 @@ class 设计文档的表能在打包版SQLite里创建和读写 {
                 outputPricePerMillion = 1.5,
                 matchMode = "any",
                 amountAlertYuan = 5.0,
+                synonyms = DEFAULT_SYNONYM_TABLE,
             )
         }
         assertEquals(1L, settingQueries.countSetting().executeAsOne())
@@ -342,6 +345,7 @@ class 设计文档的表能在打包版SQLite里创建和读写 {
             outputPricePerMillion = 2.0,
             matchMode = "all",
             amountAlertYuan = 12.5,
+            synonyms = "咖啡 / 拿铁",
         )
 
         val setting = settingQueries.selectSetting().executeAsOne()
@@ -363,6 +367,7 @@ class 设计文档的表能在打包版SQLite里创建和读写 {
         assertClose(2.0, setting.outputPricePerMillion)
         assertEquals("all", setting.matchMode)
         assertClose(12.5, setting.amountAlertYuan)
+        assertEquals("咖啡 / 拿铁", setting.synonyms)
     }
 
     @Test

@@ -25,6 +25,7 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            implementation(project(":core"))
             // 同一套打包版 SQLite，供 JVM 测试和 Android 使用。
             implementation(libs.sqlite.bundled)
             implementation(libs.sqldelight.runtime)

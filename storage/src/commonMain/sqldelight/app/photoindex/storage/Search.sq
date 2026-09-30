@@ -1,0 +1,8 @@
+selectSearchAssetIds:
+SELECT DISTINCT searchFts.assetId
+FROM searchFts
+JOIN asset ON asset.id = searchFts.assetId
+JOIN source ON source.id = asset.sourceId
+WHERE searchFts MATCH ?
+  AND asset.status = 'done'
+  AND source.enabled = 1;

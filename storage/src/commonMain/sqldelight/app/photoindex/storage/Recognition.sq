@@ -6,3 +6,8 @@ selectRecognitionByAssetId:
 SELECT assetId, promptVersion, modelId, json, searchText
 FROM recognition
 WHERE assetId = ?;
+
+updateRecognitionSearchText:
+UPDATE recognition
+SET searchText = ?
+WHERE assetId = ?;

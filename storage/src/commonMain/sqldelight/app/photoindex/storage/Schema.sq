@@ -92,21 +92,32 @@ CREATE TABLE setting (
   inputPricePerMillion REAL NOT NULL CHECK (inputPricePerMillion >= 0),
   outputPricePerMillion REAL NOT NULL CHECK (outputPricePerMillion >= 0),
   matchMode TEXT NOT NULL CHECK (matchMode IN ('any', 'all')),
-  amountAlertYuan REAL NOT NULL CHECK (amountAlertYuan >= 0)
+  amountAlertYuan REAL NOT NULL CHECK (amountAlertYuan >= 0),
+  -- 一行一组，组内用 / 分隔相等的词。查询时扩展，不改写 recognition.searchText。
+  synonyms TEXT NOT NULL
 );
 
 INSERT INTO setting (
   id, provider, endpoint, model, thinkingEnabled, thinkingTokenLimit,
   longEdge, jpegQuality, detailLevel, uploadMode, batchMaxBytes, batchMaxLines,
   concurrentBatches, wifiOnly, chargingOnly, inputPricePerMillion, outputPricePerMillion,
-  matchMode, amountAlertYuan
+  matchMode, amountAlertYuan, synonyms
 ) VALUES (
   1, 'qwen', 'https://dashscope.aliyuncs.com/compatible-mode/v1', 'qwen3-vl-flash',
   0, 1024,
   1280, 80, 'detailed', 'batch_file', 419430400, 2000,
   1, 1, 1, 0.15, 1.5,
-  'any', 5
+  'any', 5, '小红书 / 红书'
 );
+
+-- 只索引 searchText。assetId 不参与分词，避免图片 ID 被当成正文命中。
+CREATE VIRTUAL TABLE searchFts USING fts5(
+  assetId UNINDEXED,
+  searchText,
+  tokenize='trigram'
+);
+
+CREATE VIRTUAL TABLE searchFtsVocab USING fts5vocab(searchFts, 'col');
 
 sqliteVersion:
 SELECT sqlite_version() AS version;
