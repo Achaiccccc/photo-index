@@ -6,3 +6,14 @@ selectSourceById:
 SELECT id, kind, systemKey, displayName, enabled
 FROM source
 WHERE id = ?;
+
+selectEnabledSources:
+SELECT id, kind, systemKey, displayName, enabled
+FROM source
+WHERE enabled = 1
+ORDER BY displayName;
+
+updateSourceEnabled:
+UPDATE source
+SET enabled = :enabled, displayName = :displayName
+WHERE id = :id;

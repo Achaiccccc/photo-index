@@ -295,6 +295,7 @@ class 设计文档的表能在打包版SQLite里创建和读写 {
         assertEquals("any", setting.matchMode)
         assertClose(5.0, setting.amountAlertYuan)
         assertEquals(DEFAULT_SYNONYM_TABLE, setting.synonyms)
+        assertEquals(0L, setting.deleteResultsOutOfScope)
         assertEquals(1L, settingQueries.countSetting().executeAsOne())
 
         assertWriteFails {
@@ -368,6 +369,7 @@ class 设计文档的表能在打包版SQLite里创建和读写 {
         assertEquals("all", setting.matchMode)
         assertClose(12.5, setting.amountAlertYuan)
         assertEquals("咖啡 / 拿铁", setting.synonyms)
+        assertEquals(0L, setting.deleteResultsOutOfScope)
     }
 
     @Test

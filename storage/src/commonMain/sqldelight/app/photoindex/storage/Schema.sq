@@ -38,7 +38,9 @@ CREATE TABLE asset (
   attemptCount INTEGER NOT NULL,
   lastError TEXT,
   actualInputTokens INTEGER,
-  actualOutputTokens INTEGER
+  actualOutputTokens INTEGER,
+  -- 移出范围前的状态。重新勾选时恢复，已经完成的图不会再变成待处理。
+  heldStatus TEXT CHECK (heldStatus IS NULL OR heldStatus IN ('pending', 'in_batch', 'done', 'failed'))
 );
 
 CREATE INDEX asset_by_status ON asset(status);
@@ -46,6 +48,8 @@ CREATE INDEX asset_by_status ON asset(status);
 CREATE INDEX asset_by_batch ON asset(batchId);
 
 CREATE INDEX asset_by_source ON asset(sourceId);
+
+CREATE UNIQUE INDEX asset_by_source_and_system ON asset(sourceId, systemId);
 
 CREATE TABLE recognition (
   assetId TEXT NOT NULL PRIMARY KEY REFERENCES asset(id),
@@ -94,20 +98,22 @@ CREATE TABLE setting (
   matchMode TEXT NOT NULL CHECK (matchMode IN ('any', 'all')),
   amountAlertYuan REAL NOT NULL CHECK (amountAlertYuan >= 0),
   -- 一行一组，组内用 / 分隔相等的词。查询时扩展，不改写 recognition.searchText。
-  synonyms TEXT NOT NULL
+  synonyms TEXT NOT NULL,
+  -- 移出范围时删除识别结果。默认关。关闭时只把图片标成 out_of_scope。
+  deleteResultsOutOfScope INTEGER NOT NULL DEFAULT 0 CHECK (deleteResultsOutOfScope IN (0, 1))
 );
 
 INSERT INTO setting (
   id, provider, endpoint, model, thinkingEnabled, thinkingTokenLimit,
   longEdge, jpegQuality, detailLevel, uploadMode, batchMaxBytes, batchMaxLines,
   concurrentBatches, wifiOnly, chargingOnly, inputPricePerMillion, outputPricePerMillion,
-  matchMode, amountAlertYuan, synonyms
+  matchMode, amountAlertYuan, synonyms, deleteResultsOutOfScope
 ) VALUES (
   1, 'qwen', 'https://dashscope.aliyuncs.com/compatible-mode/v1', 'qwen3-vl-flash',
   0, 1024,
   1280, 80, 'detailed', 'batch_file', 419430400, 2000,
   1, 1, 1, 0.15, 1.5,
-  'any', 5, '小红书 / 红书'
+  'any', 5, '小红书 / 红书', 0
 );
 
 -- 只索引 searchText。assetId 不参与分词，避免图片 ID 被当成正文命中。

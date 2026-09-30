@@ -10,7 +10,7 @@ selectAssetById:
 SELECT
   id, sourceId, systemId, displayName, relativePath, size, dateModified, dateTaken,
   contentHash, status, batchId, configFingerprint, attemptCount, lastError,
-  actualInputTokens, actualOutputTokens
+  actualInputTokens, actualOutputTokens, heldStatus
 FROM asset
 WHERE id = ?;
 
@@ -18,7 +18,7 @@ selectAssetsByBatchId:
 SELECT
   id, sourceId, systemId, displayName, relativePath, size, dateModified, dateTaken,
   contentHash, status, batchId, configFingerprint, attemptCount, lastError,
-  actualInputTokens, actualOutputTokens
+  actualInputTokens, actualOutputTokens, heldStatus
 FROM asset
 WHERE batchId = ?
 ORDER BY id;
@@ -27,10 +27,61 @@ selectAssetsByStatus:
 SELECT
   id, sourceId, systemId, displayName, relativePath, size, dateModified, dateTaken,
   contentHash, status, batchId, configFingerprint, attemptCount, lastError,
-  actualInputTokens, actualOutputTokens
+  actualInputTokens, actualOutputTokens, heldStatus
 FROM asset
 WHERE status = ?
 ORDER BY id;
+
+selectSystemIdsBySource:
+SELECT systemId
+FROM asset
+WHERE sourceId = ?;
+
+countAssetsByStatus:
+SELECT COUNT(*) AS assetCount
+FROM asset
+WHERE status = ?;
+
+countAssetsBySource:
+SELECT COUNT(*) AS assetCount
+FROM asset
+WHERE sourceId = ?;
+
+-- 取消来源时记住原状态。已经移出的行不要把 heldStatus 覆盖成 out_of_scope。
+markSourceOutOfScope:
+UPDATE asset
+SET
+  heldStatus = CASE WHEN status = 'out_of_scope' THEN heldStatus ELSE status END,
+  status = 'out_of_scope'
+WHERE sourceId = ?;
+
+restoreSourceScope:
+UPDATE asset
+SET
+  status = COALESCE(heldStatus, 'pending'),
+  heldStatus = NULL
+WHERE sourceId = ? AND status = 'out_of_scope';
+
+-- 只取仍在范围内的一页。afterModified < 0 表示第一页。
+selectInScopePage:
+SELECT
+  asset.id,
+  asset.displayName,
+  asset.systemId,
+  asset.dateModified,
+  source.kind,
+  source.systemKey
+FROM asset
+JOIN source ON source.id = asset.sourceId
+WHERE source.enabled = 1
+  AND asset.status != 'out_of_scope'
+  AND (
+    :afterModified < 0
+    OR asset.dateModified < :afterModified
+    OR (asset.dateModified = :afterModified AND asset.id > :afterId)
+  )
+ORDER BY asset.dateModified DESC, asset.id
+LIMIT :pageSize;
 
 -- 一次只取下一张待处理图片，避免把整库 ID 装进内存。
 selectNextPendingId:

@@ -1,5 +1,13 @@
 package app.photoindex.core
 
+/**
+ * 同一组材料始终得到同一个本地 ID。
+ * 来源和图片用它做主键，重复扫描不会另起一行。
+ */
+fun stableLocalId(vararg parts: String): String {
+    return sha256Hex(parts.joinToString("\u0000").encodeToByteArray())
+}
+
 /** 写入批文件时给压缩后的 JPEG 算内容哈希。结果是小写十六进制。 */
 internal fun sha256Hex(bytes: ByteArray): String {
     val digest = sha256(bytes)

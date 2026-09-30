@@ -1,5 +1,7 @@
 package app.photoindex.storage
 
+import app.cash.sqldelight.db.QueryResult
+
 /** 一次打开的索引库。用完要关闭。 */
 class OpenedPhotoIndexDatabase internal constructor(
     private val driver: BundledSqlDriver,
@@ -50,17 +52,38 @@ internal object SearchIndex {
     }
 }
 
+/** 当前建表语句的版本。表结构变了再加，已经打开过的库不要重跑建表。 */
+internal const val PHOTO_INDEX_SCHEMA_VERSION = 1L
+
 /** 用打包版 SQLite 打开索引库。不传文件名时使用内存库，供 JVM 测试使用。 */
 fun openPhotoIndexDatabase(name: String = ":memory:"): OpenedPhotoIndexDatabase {
     val driver = openBundledSqlDriver(name)
-    PhotoIndexDatabase.Schema.create(driver).value
-    // SQLDelight 会把触发器排到虚拟表前面，所以改在建表之后安装。
-    // 识别结果一写入，全文索引就跟着变，下一次查询能看见新词。
-    installSearchTriggers(driver)
+    if (driver.schemaUserVersion() == 0L) {
+        PhotoIndexDatabase.Schema.create(driver).value
+        // SQLDelight 会把触发器排到虚拟表前面，所以改在建表之后安装。
+        // 识别结果一写入，全文索引就跟着变，下一次查询能看见新词。
+        installSearchTriggers(driver)
+        driver.execute(null, "PRAGMA user_version = $PHOTO_INDEX_SCHEMA_VERSION", 0, null)
+    } else {
+        installSearchTriggers(driver)
+    }
     return OpenedPhotoIndexDatabase(
         driver = driver,
         database = PhotoIndexDatabase(driver),
     )
+}
+
+private fun BundledSqlDriver.schemaUserVersion(): Long {
+    return executeQuery(
+        null,
+        "PRAGMA user_version",
+        { cursor ->
+            val present = cursor.next().value
+            QueryResult.Value(if (present) cursor.getLong(0) ?: 0L else 0L)
+        },
+        0,
+        null,
+    ).value
 }
 
 private fun installSearchTriggers(driver: BundledSqlDriver) {
