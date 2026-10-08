@@ -26,9 +26,13 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -189,7 +193,7 @@ fun ScopeScreen(
             Text(text = "移出范围 $outOfScopeCount 张，不再待处理，记录仍保留")
         }
         if (loading || busy) {
-            Text(text = if (loading) "正在读取相册…" else "正在扫描选中范围…")
+            ScanProgressDialog(loading = loading)
         }
         message?.let { Text(text = it) }
         Row(
@@ -464,6 +468,28 @@ private fun toggleSource(
 private fun selectionKey(source: PictureSource): String = selectionKey(source.kind.stored, source.systemKey)
 
 private fun selectionKey(kind: String, systemKey: String): String = "$kind\u0000$systemKey"
+
+@Composable
+private fun ScanProgressDialog(loading: Boolean) {
+    Dialog(
+        onDismissRequest = {},
+        properties = DialogProperties(
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false,
+        ),
+    ) {
+        Surface(shape = MaterialTheme.shapes.medium) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                CircularProgressIndicator()
+                Text(text = if (loading) "正在读取相册…" else "正在扫描选中范围…")
+            }
+        }
+    }
+}
 
 @Composable
 private fun SourceRow(

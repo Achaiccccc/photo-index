@@ -20,9 +20,13 @@ class 提示词解析与搜索文本 {
         assertTrue(prompt.contains("\"publishedAt\""))
         assertTrue(prompt.contains("\"ocrText\""))
         assertTrue(prompt.contains("\"tags\""))
-        assertTrue(prompt.contains("看不到的平台、作者、时间必须是空字符串"))
+        assertTrue(prompt.contains("图片类型不固定"))
+        assertTrue(prompt.contains("表情包"))
+        assertTrue(prompt.contains("宠物"))
+        assertTrue(prompt.contains("帖子"))
+        assertTrue(prompt.contains("空字符串"))
         assertTrue(prompt.contains("禁止") && prompt.contains("编造"))
-        assertTrue(prompt.contains("没有作者行就让 author 为空字符串"))
+        assertTrue(prompt.contains("不要把某一种图当成标准"))
         assertTrue(prompt.contains(PROMPT_VERSION))
     }
 

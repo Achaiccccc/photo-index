@@ -40,7 +40,7 @@ class 配置指纹与估价 {
         assertNotEquals(base.fingerprint(), base.copy(longEdge = null).fingerprint())
         assertNotEquals(base.fingerprint(), base.copy(jpegQuality = 60).fingerprint())
         assertNotEquals(base.fingerprint(), base.copy(detailLevel = DetailLevel.BRIEF).fingerprint())
-        assertNotEquals(base.fingerprint(), base.copy(promptVersion = "2").fingerprint())
+        assertNotEquals(base.fingerprint(), base.copy(promptVersion = "$PROMPT_VERSION-other").fingerprint())
     }
 
     @Test
