@@ -364,18 +364,37 @@ fun SettingsScreen(onBack: () -> Unit) {
             },
         )
         Text(text = "匹配方式")
+        Text(
+            text = "多个词按空格分开。OR 是命中任意片段，命中段数多的排前面。AND 是必须同时包含。",
+            style = MaterialTheme.typography.bodySmall,
+        )
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(
                 selected = settings.matchMode == "any",
                 onClick = { persist(settings.copy(matchMode = "any")) },
-                label = { Text(text = "命中任意片段") },
+                label = { Text(text = "OR · 命中任意片段") },
             )
             FilterChip(
                 selected = settings.matchMode == "all",
                 onClick = { persist(settings.copy(matchMode = "all")) },
-                label = { Text(text = "必须同时包含") },
+                label = { Text(text = "AND · 必须同时包含") },
             )
         }
+        Text(text = "同义词表")
+        Text(
+            text = "一行一组，组内用 / 分隔相等的词。查询时扩展，不改已经存下的识别结果。",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        OutlinedTextField(
+            value = form.synonyms,
+            onValueChange = { text ->
+                form.synonyms = text
+                persist(settings.copy(synonyms = text))
+            },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text(text = "同义词") },
+            minLines = 3,
+        )
         NumberField(
             value = form.alert,
             label = "金额提醒线（元，默认 5）",
@@ -401,6 +420,7 @@ private class SettingsForm {
     var outputPrice by mutableStateOf("1.5")
     var alert by mutableStateOf("5")
     var key by mutableStateOf("")
+    var synonyms by mutableStateOf("")
 
     fun fillFrom(settings: IndexSettings) {
         endpoint = settings.endpoint
@@ -412,6 +432,7 @@ private class SettingsForm {
         inputPrice = settings.inputPricePerMillion.toPlainString()
         outputPrice = settings.outputPricePerMillion.toPlainString()
         alert = settings.amountAlertYuan.toPlainString()
+        synonyms = settings.synonyms
     }
 }
 

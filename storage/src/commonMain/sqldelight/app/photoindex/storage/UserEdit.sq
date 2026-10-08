@@ -6,3 +6,7 @@ selectUserEditByAssetId:
 SELECT assetId, addedTerms, suppressedTerms
 FROM user_edit
 WHERE assetId = ?;
+
+upsertUserEdit:
+INSERT OR REPLACE INTO user_edit(assetId, addedTerms, suppressedTerms)
+VALUES (?, ?, ?);

@@ -6,3 +6,15 @@ JOIN source ON source.id = asset.sourceId
 WHERE searchFts MATCH ?
   AND asset.status = 'done'
   AND source.enabled = 1;
+
+countEnabledSources:
+SELECT COUNT(*) AS sourceCount
+FROM source
+WHERE enabled = 1;
+
+countSearchableDone:
+SELECT COUNT(*) AS assetCount
+FROM asset
+JOIN source ON source.id = asset.sourceId
+WHERE asset.status = 'done'
+  AND source.enabled = 1;

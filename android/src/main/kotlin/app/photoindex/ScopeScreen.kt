@@ -74,6 +74,7 @@ private val thumbnailSlots = Semaphore(4)
 fun ScopeScreen(
     onOpenSettings: () -> Unit,
     onOpenQuote: () -> Unit,
+    onOpenSearch: () -> Unit,
 ) {
     val context = LocalContext.current
     val sources = remember { AndroidPictureSources(context) }
@@ -230,6 +231,9 @@ fun ScopeScreen(
             }
             Button(onClick = { folderLauncher.launch(null) }) {
                 Text(text = "添加文件夹")
+            }
+            Button(onClick = onOpenSearch) {
+                Text(text = "搜索")
             }
             Button(onClick = onOpenSettings) {
                 Text(text = "设置")

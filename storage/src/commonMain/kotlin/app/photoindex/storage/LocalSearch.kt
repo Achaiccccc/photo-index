@@ -12,6 +12,25 @@ import app.photoindex.core.searchMatchMode
 /** 设计文档里搜索结果一页几十条。调用方可以改小，用来覆盖分页。 */
 const val SEARCH_PAGE_SIZE = 40
 
+/** 搜索页在出结果之前要区分的三种库状态。空查询不算「无结果」。 */
+enum class SearchLibraryState {
+    EMPTY_SCOPE,
+    NOT_INDEXED,
+    READY,
+}
+
+/**
+ * 没有启用的来源是空范围。有来源但没有已完成的图是尚未建库。
+ * 已完成且来源仍启用时才可以搜索。
+ */
+fun PhotoIndexDatabase.searchLibraryState(): SearchLibraryState {
+    val enabled = searchQueries.countEnabledSources().executeAsOne()
+    if (enabled == 0L) return SearchLibraryState.EMPTY_SCOPE
+    val done = searchQueries.countSearchableDone().executeAsOne()
+    if (done == 0L) return SearchLibraryState.NOT_INDEXED
+    return SearchLibraryState.READY
+}
+
 private const val FTS_TEXT_COLUMN = "searchText"
 private const val FTS_CLAUSE_CHUNK = 80
 

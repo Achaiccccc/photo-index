@@ -129,24 +129,9 @@ class PhotoIndexBatches(
             StoredAsset(id = row.id, status = row.status, batchId = row.batchId)
         }
 
-    override fun userTerms(assetId: String): UserTerms {
-        val row = database.userEditQueries.selectUserEditByAssetId(assetId).executeAsOneOrNull()
-            ?: return UserTerms()
-        return UserTerms(
-            addedTerms = splitTerms(row.addedTerms),
-            suppressedTerms = splitTerms(row.suppressedTerms),
-        )
-    }
+    override fun userTerms(assetId: String): UserTerms = database.storedUserTerms(assetId)
 
-    override fun localText(assetId: String): LocalPictureText {
-        val asset = database.assetQueries.selectAssetById(assetId).executeAsOne()
-        val source = database.sourceQueries.selectSourceById(asset.sourceId).executeAsOne()
-        return LocalPictureText(
-            fileName = asset.displayName,
-            albumName = source.displayName,
-            takenDate = asset.dateTaken?.toString().orEmpty(),
-        )
-    }
+    override fun localText(assetId: String): LocalPictureText = database.localPictureText(assetId)
 
     override fun markUploading(id: String) {
         database.batchQueries.markBatchUploading(id)
@@ -247,9 +232,6 @@ class PhotoIndexBatches(
         database.batchQueries.deleteBatch(id)
     }
 }
-
-private fun splitTerms(text: String): List<String> =
-    text.split(Regex("\\s+")).filter { it.isNotEmpty() }
 
 private fun app.photoindex.storage.Batch.toStored(): StoredBatch = StoredBatch(
     id = id,

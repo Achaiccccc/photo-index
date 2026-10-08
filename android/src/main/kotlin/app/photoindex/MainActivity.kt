@@ -38,6 +38,8 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize().systemBarSafePadding()) {
                     var page by rememberSaveable { mutableStateOf("scope") }
                     var settingsReturn by rememberSaveable { mutableStateOf("scope") }
+                    var searchQuery by rememberSaveable { mutableStateOf("") }
+                    var detailAssetId by rememberSaveable { mutableStateOf("") }
                     when (page) {
                         "settings" -> SettingsScreen(onBack = { page = settingsReturn })
                         "quote" -> QuoteScreen(
@@ -47,12 +49,30 @@ class MainActivity : ComponentActivity() {
                                 page = "settings"
                             },
                         )
+                        "search" -> SearchScreen(
+                            query = searchQuery,
+                            onQueryChange = { searchQuery = it },
+                            onBack = { page = "scope" },
+                            onOpenSettings = {
+                                settingsReturn = "search"
+                                page = "settings"
+                            },
+                            onOpenDetail = { assetId ->
+                                detailAssetId = assetId
+                                page = "detail"
+                            },
+                        )
+                        "detail" -> RecognitionDetailScreen(
+                            assetId = detailAssetId,
+                            onBack = { page = "search" },
+                        )
                         else -> ScopeScreen(
                             onOpenSettings = {
                                 settingsReturn = "scope"
                                 page = "settings"
                             },
                             onOpenQuote = { page = "quote" },
+                            onOpenSearch = { page = "search" },
                         )
                     }
                 }
