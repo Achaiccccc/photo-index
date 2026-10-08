@@ -131,6 +131,7 @@ class BatchIndexing(
                 ledger = ledger,
                 newBatchId = newBatchId,
                 config = config,
+                stopAfterSealedBatches = 1,
             )
         } catch (_: SealInterrupted) {
             halted = true

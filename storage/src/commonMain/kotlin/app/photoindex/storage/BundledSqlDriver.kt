@@ -203,5 +203,14 @@ internal fun openBundledSqlDriver(name: String = ":memory:"): BundledSqlDriver {
         while (statement.step()) {
         }
     }
+    connection.prepare("PRAGMA busy_timeout = 5000").use { statement ->
+        while (statement.step()) {
+        }
+    }
+    // 前台服务和界面各开一个连接。WAL 让读进度的时候写批状态不用互相堵住。
+    connection.prepare("PRAGMA journal_mode = WAL").use { statement ->
+        while (statement.step()) {
+        }
+    }
     return BundledSqlDriver(connection)
 }

@@ -18,6 +18,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 
 class MainActivity : ComponentActivity() {
+    private var visible = false
+
+    override fun onStart() {
+        super.onStart()
+        visible = true
+        IndexingService.recoverIfNeeded(this) { visible }
+    }
+
+    override fun onStop() {
+        visible = false
+        super.onStop()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {

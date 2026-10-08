@@ -528,6 +528,12 @@ open class 批状态机与中断恢复 {
         newBatchId: () -> String,
         control: BatchRunControl = BatchRunControl(),
         confirmed: Boolean = true,
+        limits: BatchPackLimits = BatchPackLimits(
+            maxFileBytes = 1_000_000,
+            maxLines = 10,
+            maxLineBytes = 200_000,
+        ),
+        uploadAllowed: () -> Boolean = { true },
     ): BatchIndexing {
         if (confirmed) database.quoteConfirmationQueries.markConfirmed()
         else database.quoteConfirmationQueries.clearConfirmed()
@@ -538,12 +544,9 @@ open class 批状态机与中断恢复 {
             compressor = compressor,
             files = DirectoryBatchFiles(directory),
             newBatchId = newBatchId,
-            limits = BatchPackLimits(
-                maxFileBytes = 1_000_000,
-                maxLines = 10,
-                maxLineBytes = 200_000,
-            ),
+            limits = limits,
             control = control,
+            uploadAllowed = uploadAllowed,
         )
     }
 

@@ -1,7 +1,13 @@
 package app.photoindex
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -30,11 +37,15 @@ import app.photoindex.core.JobState
 import app.photoindex.core.QuotePreview
 import app.photoindex.core.formatYuan
 import app.photoindex.core.formatYuanRange
+import app.photoindex.platform.UploadGate
 import app.photoindex.storage.IndexSettingsStore
+import app.photoindex.storage.PhotoIndexDatabase
+import kotlinx.coroutines.delay
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * 展示待处理张数和估价。确认只写入标记并留在本页，不启动任务，也不上传。
+ * 展示待处理张数和估价。确认后启动前台批量任务，并留在本页看进度。
+ * 本节点的任务走假服务商，不连接百炼。
  */
 @Composable
 fun QuoteScreen(
@@ -43,12 +54,18 @@ fun QuoteScreen(
 ) {
     val context = LocalContext.current
     val appIndex = remember { AppIndex(context) }
+    val gate = remember { UploadGate(context) }
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
     val alive = remember { AtomicBoolean(true) }
     val ticket = remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
     var snapshot by remember { mutableStateOf<QuoteSnapshot?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
+    var onWifi by remember { mutableStateOf(gate.onWifi) }
+    var charging by remember { mutableStateOf(gate.charging) }
+    val notificationPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { IndexingService.start(context) }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -62,12 +79,11 @@ fun QuoteScreen(
         ticket.intValue = mine
         appIndex.access { database ->
             try {
-                val loaded = readQuote(database)
+                val loaded = readQuote(context, database)
                 mainHandler.post {
                     if (!alive.get() || mine != ticket.intValue) return@post
                     snapshot = loaded
                     loading = false
-                    message = null
                 }
             } catch (error: Exception) {
                 val detail = error.message?.takeIf { it.isNotBlank() } ?: "估价失败"
@@ -81,7 +97,10 @@ fun QuoteScreen(
     }
 
     LaunchedEffect(Unit) {
-        reload()
+        while (alive.get()) {
+            reload()
+            delay(1000)
+        }
     }
 
     val current = snapshot
@@ -122,43 +141,103 @@ fun QuoteScreen(
         Text(text = calibrationNote(preview))
         preview.providerNote?.let { Text(text = it) }
         Text(text = "上传中的批 ${current.uploadingBatches} 个")
-        Text(text = "任务${jobLabel(current.jobState)}")
+        Text(text = "任务${jobLabel(current.progress.jobState)}")
+        Text(text = "假服务商，不连接百炼。拿到任务号后会先保持运行中约 20 秒。")
+        Text(text = current.progress.systemStatus)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text = "当作已连接 Wi-Fi", modifier = Modifier.weight(1f))
+            Switch(
+                checked = onWifi,
+                onCheckedChange = { checked ->
+                    onWifi = checked
+                    gate.onWifi = checked
+                    reload()
+                },
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text = "当作正在充电", modifier = Modifier.weight(1f))
+            Switch(
+                checked = charging,
+                onCheckedChange = { checked ->
+                    charging = checked
+                    gate.charging = checked
+                    reload()
+                },
+            )
+        }
+        Text(text = "条件不满足时可以打包，但不会上传。")
+        Text(text = current.progress.notificationText, style = MaterialTheme.typography.titleMedium)
+        Text(text = "数据库里已入库 ${current.progress.doneCount} 张，上传次数 ${current.progress.uploadCount}")
+        current.progress.batches.forEach { batch ->
+            Text(text = batchLine(batch))
+        }
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Button(onClick = {
-                appIndex.access { database ->
-                    try {
-                        IndexSettingsStore(database).confirm()
-                        val loaded = readQuote(database)
-                        mainHandler.post {
-                            if (!alive.get()) return@post
-                            snapshot = loaded
-                            message = "已确认。这一步只记下确认，还没有上传。"
+            when (current.progress.jobState) {
+                JobState.RUNNING -> {
+                    Button(onClick = { IndexingService.pause(context) }) { Text(text = "暂停") }
+                    Button(onClick = { IndexingService.cancel(context) }) { Text(text = "停止并取消") }
+                }
+                JobState.PAUSED -> {
+                    Button(onClick = { IndexingService.resume(context) }) { Text(text = "继续") }
+                    Button(onClick = { IndexingService.cancel(context) }) { Text(text = "停止并取消") }
+                }
+                else -> if (!current.confirmed || current.preview.pendingCount > 0) {
+                    Button(onClick = {
+                        appIndex.access { database ->
+                            try {
+                                val store = IndexSettingsStore(database)
+                                val blocked = indexStartBlockReason(store.load())
+                                if (!store.confirmed()) store.confirm()
+                                val loaded = readQuote(context, database)
+                                mainHandler.post {
+                                    if (!alive.get()) return@post
+                                    snapshot = loaded
+                                    message = blocked
+                                    if (blocked == null && loaded.preview.pendingCount > 0) {
+                                        startIndexing(context, notificationPermission)
+                                    }
+                                }
+                            } catch (error: Exception) {
+                                val detail = error.message?.takeIf { it.isNotBlank() } ?: "确认失败"
+                                mainHandler.post {
+                                    if (!alive.get()) return@post
+                                    message = detail
+                                }
+                            }
                         }
-                    } catch (error: Exception) {
-                        val detail = error.message?.takeIf { it.isNotBlank() } ?: "确认失败"
-                        mainHandler.post {
-                            if (!alive.get()) return@post
-                            message = detail
-                        }
+                    }) {
+                        Text(text = if (current.confirmed) "开始批量上传" else "确认估价")
                     }
                 }
-            }) {
-                Text(text = if (current.confirmed) "已确认" else "确认估价")
             }
             if (preview.repeatsAmountBesideButton) {
                 Text(text = "合计 ${formatYuan(preview.activeTotal.point)} 元")
             }
         }
-        Text(
-            text = if (current.confirmed) {
-                "已确认。这一步只记下确认，还没有上传。"
-            } else {
-                "尚未确认，不会上传。"
-            },
-        )
+        Text(text = confirmationLine(current))
+    }
+}
+
+private fun startIndexing(
+    context: Context,
+    requestPermission: androidx.activity.result.ActivityResultLauncher<String>,
+) {
+    val needsPermission = Build.VERSION.SDK_INT >= 33 &&
+        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+    if (needsPermission) {
+        requestPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+    } else {
+        IndexingService.start(context)
     }
 }
 
@@ -167,18 +246,32 @@ private data class QuoteSnapshot(
     val preview: QuotePreview,
     val confirmed: Boolean,
     val uploadingBatches: Int,
-    val jobState: String,
+    val progress: IndexProgress,
 )
 
-private fun readQuote(database: app.photoindex.storage.PhotoIndexDatabase): QuoteSnapshot {
+private fun readQuote(context: Context, database: PhotoIndexDatabase): QuoteSnapshot {
     val store = IndexSettingsStore(database)
     return QuoteSnapshot(
         settings = store.load(),
         preview = store.preview(),
         confirmed = store.confirmed(),
         uploadingBatches = database.batchQueries.selectBatchesByState("uploading").executeAsList().size,
-        jobState = database.jobQueries.selectJob().executeAsOne().state,
+        progress = readIndexProgress(context, database, uploadAllowedNow(context, database)),
     )
+}
+
+private fun confirmationLine(snapshot: QuoteSnapshot): String = when {
+    snapshot.progress.jobState == JobState.RUNNING -> "已确认，正在建库。中途不用逐张点击。"
+    snapshot.progress.jobState == JobState.PAUSED -> "已暂停。已经提交的批还会入库，新的批不再封口。"
+    !snapshot.confirmed -> "尚未确认，不会上传。"
+    snapshot.preview.pendingCount == 0 && snapshot.progress.batches.isEmpty() -> "已确认。没有待处理的图。"
+    snapshot.preview.pendingCount == 0 -> "已确认。"
+    else -> "已确认。点开始批量上传后才会跑。"
+}
+
+private fun batchLine(batch: IndexBatchStatus): String {
+    val task = batch.remoteBatchId ?: "还没有任务号"
+    return "${batch.state} · ${batch.lineCount} 张 · 任务 $task"
 }
 
 private fun thinkingLabel(settings: IndexSettings): String =

@@ -9,6 +9,7 @@ import kotlin.io.encoding.Base64
  * 达到行数或体积上限就封口；没封口的半截文件不写入数据库。
  * 上传、查询和进程恢复由批状态机驱动。
  * 真机解码、去掉定位信息由 JpegCompressor 完成；打包测试仍使用这里的假压缩器。
+ * [packImageBatch] 默认把输入全部打完。状态机传入封口上限，一次只留下一批。
  */
 fun interface PendingImageSource {
     fun nextId(): String?
@@ -24,6 +25,9 @@ interface CompressedJpeg : AutoCloseable {
 interface ImageCompressor {
     fun compress(assetId: String, jpegQuality: Int): CompressedJpeg
 }
+
+/** 这张原图解不开。打包器只把这一张标失败，同批其他图继续。 */
+class ImageUnreadable(val reason: String) : Exception(reason)
 
 /** 正在写的那一个批文件。磁盘上同时只能有一个未关闭的实现。 */
 interface BatchFileSink : AutoCloseable {
@@ -179,7 +183,9 @@ fun packImageBatch(
     ledger: BatchLedger,
     newBatchId: () -> String,
     config: BatchPackConfig,
+    stopAfterSealedBatches: Int = Int.MAX_VALUE,
 ): BatchPackOutcome {
+    require(stopAfterSealedBatches > 0) { "至少要允许封口一批" }
     val sealed = mutableListOf<SealedBatch>()
     var current: OpenBatch? = null
     try {
@@ -190,6 +196,8 @@ fun packImageBatch(
             if (open != null && !open.fits(prepared.jsonByteSize, config.limits)) {
                 sealed += closeAndSeal(open, ledger, config)
                 open = null
+                current = null
+                if (sealed.size >= stopAfterSealedBatches) break
             }
             if (open == null) {
                 val batchId = newBatchId()
@@ -206,6 +214,7 @@ fun packImageBatch(
             if (open.isFull(config.limits)) {
                 sealed += closeAndSeal(open, ledger, config)
                 current = null
+                if (sealed.size >= stopAfterSealedBatches) break
             }
         }
     } finally {
@@ -223,10 +232,15 @@ private fun encodeAsset(
     ledger: BatchLedger,
     config: BatchPackConfig,
 ): PreparedLine? {
-    val first = compressLine(assetId, config.jpegQuality, compressor, config)
-    if (first != null) return first
-    val second = compressLine(assetId, reducedJpegQuality(config.jpegQuality), compressor, config)
-    if (second != null) return second
+    try {
+        val first = compressLine(assetId, config.jpegQuality, compressor, config)
+        if (first != null) return first
+        val second = compressLine(assetId, reducedJpegQuality(config.jpegQuality), compressor, config)
+        if (second != null) return second
+    } catch (error: ImageUnreadable) {
+        ledger.markLineTooLarge(assetId, error.reason)
+        return null
+    }
     ledger.markLineTooLarge(assetId, lineTooLargeReason(config.limits.maxLineBytes))
     return null
 }
