@@ -6,11 +6,10 @@ import app.photoindex.core.JobState
 import app.photoindex.core.ProviderCatalog
 import app.photoindex.core.UPLOAD_MODE_BATCH_FILE
 import app.photoindex.core.currentBatchNumber
-import app.photoindex.core.decodeFakeBatchLedger
 import app.photoindex.core.indexNotificationText
-import app.photoindex.platform.FileFakeProviderLedger
+import app.photoindex.platform.QwenCallTrace
 import app.photoindex.platform.UploadGate
-import app.photoindex.platform.fakeLedgerFile
+import app.photoindex.platform.qwenCallTraceFile
 import app.photoindex.platform.systemLinkStatus
 import app.photoindex.storage.IndexSettingsStore
 import app.photoindex.storage.PhotoIndexDatabase
@@ -30,12 +29,14 @@ data class IndexProgress(
     val currentBatchNumber: Int,
     val batches: List<IndexBatchStatus>,
     val uploadCount: Int,
+    val deletedRemoteFileIds: List<String>,
     val notificationText: String,
     val systemStatus: String,
 )
 
-/** 尚未接入的服务商，以及还没做的实时分批，确认后也不启动上传。 */
-fun indexStartBlockReason(settings: IndexSettings): String? {
+/** 没有密钥、尚未接入的服务商，以及还没做的实时分批，确认后也不启动上传。 */
+fun indexStartBlockReason(settings: IndexSettings, apiKeyPresent: Boolean): String? {
+    if (!apiKeyPresent) return "还没有 API Key，不会上传。"
     val provider = ProviderCatalog.require(settings.provider)
     if (!provider.batchFileReady) return provider.note ?: "这个服务商尚未接入，不会上传。"
     if (settings.uploadMode != UPLOAD_MODE_BATCH_FILE) return "实时分批还没接入，不会上传。"
@@ -57,11 +58,9 @@ fun readIndexProgress(
         batch.remoteBatchId == null && batch.state !in BatchState.terminal && batch.state != BatchState.PACKING
     }
     val number = currentBatchNumber(batches.map { it.state })
-    val uploadCount = try {
-        decodeFakeBatchLedger(FileFakeProviderLedger(fakeLedgerFile(context)).read()).uploadCount
-    } catch (_: Exception) {
-        0
-    }
+    val trace = QwenCallTrace(qwenCallTraceFile(context))
+    val uploadCount = trace.uploadCount()
+    val deletedRemoteFileIds = trace.deletedFileIds()
     return IndexProgress(
         doneCount = done,
         totalCount = done + pending + inBatch + failed,
@@ -76,6 +75,7 @@ fun readIndexProgress(
             )
         },
         uploadCount = uploadCount,
+        deletedRemoteFileIds = deletedRemoteFileIds,
         notificationText = indexNotificationText(
             doneCount = done,
             totalCount = done + pending + inBatch + failed,

@@ -16,13 +16,16 @@ import android.os.Looper
 import android.util.Log
 import app.photoindex.core.BatchIndexing
 import app.photoindex.core.BatchPackLimits
+import app.photoindex.core.BatchProvider
 import app.photoindex.core.BatchState
 import app.photoindex.core.DEFAULT_BATCH_LINE_BYTES
-import app.photoindex.core.FixedDetailBatchProvider
 import app.photoindex.core.JobState
+import app.photoindex.core.qwenBatchProvider
 import app.photoindex.platform.AssetJpegCompressor
-import app.photoindex.platform.FileFakeProviderLedger
-import app.photoindex.platform.fakeLedgerFile
+import app.photoindex.platform.KeystoreApiKeyStore
+import app.photoindex.platform.QwenCallTrace
+import app.photoindex.platform.TracingBatchProvider
+import app.photoindex.platform.qwenCallTraceFile
 import app.photoindex.storage.DirectoryBatchFiles
 import app.photoindex.storage.DirectoryBatchWorkspace
 import app.photoindex.storage.IndexSettingsStore
@@ -36,8 +39,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 确认之后的前台建库任务。
- * 内部调用批状态机。这一节点注入假服务商，不连接百炼。
- * 假服务商拿到任务号后先保持运行中一段时间，方便划掉应用再打开核对任务号。
+ * 内部调用批状态机，服务商是千问批量适配器。API Key 只从加密存储读。
+ * 已经记下任务号之后再打开，只查询原来的任务，不会重新上传。
  * 进程被杀掉之后不会自己复活；再次打开应用时按库里的进度继续。
  */
 class IndexingService : Service() {
@@ -90,23 +93,32 @@ class IndexingService : Service() {
             progressThread.start()
             val database = opened.database
             val directory = File(cacheDir, "batches")
-            val indexing = BatchIndexing(
-                catalog = PhotoIndexBatches(database),
-                provider = fakeProvider(),
-                workspace = DirectoryBatchWorkspace(directory),
-                compressor = AssetJpegCompressor(this, database),
-                files = DirectoryBatchFiles(directory),
-                newBatchId = { "b-${System.currentTimeMillis()}-${++batchNumber}" },
-                limits = limitsFrom(database),
-                uploadAllowed = { uploadAllowedNow(this, database) },
-            )
-            while (true) {
+            val provider = qwenProvider(database)
+            if (provider == null) {
+                Log.i(TAG, "还没有 API Key，不会上传")
+            }
+            val indexing = provider?.let {
+                BatchIndexing(
+                    catalog = PhotoIndexBatches(database),
+                    provider = it,
+                    workspace = DirectoryBatchWorkspace(directory),
+                    compressor = AssetJpegCompressor(this, database),
+                    files = DirectoryBatchFiles(directory),
+                    newBatchId = { "b-${System.currentTimeMillis()}-${++batchNumber}" },
+                    limits = limitsFrom(database),
+                    uploadAllowed = { uploadAllowedNow(this, database) },
+                )
+            }
+            if (indexing != null) while (true) {
                 val action = commands.poll(POLL_SECONDS, TimeUnit.SECONDS)
                 if (action == ACTION_STOP) break
                 try {
                     when (action) {
                         ACTION_START -> {
-                            val blocked = indexStartBlockReason(IndexSettingsStore(database).load())
+                            val blocked = indexStartBlockReason(
+                                IndexSettingsStore(database).load(),
+                                apiKeyPresent = true,
+                            )
                             if (blocked != null) {
                                 Log.i(TAG, blocked)
                                 break
@@ -152,17 +164,19 @@ class IndexingService : Service() {
         }
     }
 
-    private fun fakeProvider(): FixedDetailBatchProvider = FixedDetailBatchProvider(
-        ledger = FileFakeProviderLedger(fakeLedgerFile(this)),
-        readLines = { path -> File(path).readLines() },
-        writeText = { path, text ->
-            val file = File(path)
-            file.parentFile?.mkdirs()
-            file.writeText(text)
-        },
-        holdMillis = FAKE_HOLD_MILLIS,
-        now = System::currentTimeMillis,
-    )
+    /**
+     * 密钥为空时返回 null，调用方不打包、不连接百炼。
+     * 明文只留在适配器内存里，不写进日志。
+     */
+    private fun qwenProvider(database: PhotoIndexDatabase): BatchProvider? {
+        val apiKey = KeystoreApiKeyStore(this).read()?.trim().orEmpty()
+        if (apiKey.isEmpty()) return null
+        val endpoint = IndexSettingsStore(database).load().endpoint
+        return TracingBatchProvider(
+            delegate = qwenBatchProvider(apiKey = apiKey, baseUrl = endpoint),
+            trace = QwenCallTrace(qwenCallTraceFile(this)),
+        )
+    }
 
     private fun limitsFrom(database: PhotoIndexDatabase): BatchPackLimits {
         val setting = database.settingQueries.selectSetting().executeAsOne()
@@ -188,7 +202,8 @@ class IndexingService : Service() {
     private fun publish(database: PhotoIndexDatabase) {
         val progress = readIndexProgress(this, database, uploadAllowedNow(this, database))
         val task = progress.batches.mapNotNull { it.remoteBatchId }.lastOrNull()
-        Log.i(TAG, "${progress.notificationText} 上传次数=${progress.uploadCount} 任务=${task ?: "无"}")
+        val deleted = progress.deletedRemoteFileIds.joinToString(",").ifEmpty { "无" }
+        Log.i(TAG, "${progress.notificationText} 上传次数=${progress.uploadCount} 已删远端=$deleted 任务=${task ?: "无"}")
         startInForeground(buildNotification(progress.notificationText, progress.jobState, task))
     }
 
@@ -257,9 +272,6 @@ class IndexingService : Service() {
         private const val NOTIFICATION_ID = 1001
         private const val POLL_SECONDS = 1L
         private const val PROGRESS_INTERVAL_MILLIS = 1000L
-
-        /** 拿到任务号之后先保持运行中，留出划掉应用的时间。 */
-        const val FAKE_HOLD_MILLIS = 20_000L
 
         private const val TAG = "PhotoIndex"
 

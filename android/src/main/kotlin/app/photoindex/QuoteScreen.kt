@@ -37,6 +37,7 @@ import app.photoindex.core.JobState
 import app.photoindex.core.QuotePreview
 import app.photoindex.core.formatYuan
 import app.photoindex.core.formatYuanRange
+import app.photoindex.platform.KeystoreApiKeyStore
 import app.photoindex.platform.UploadGate
 import app.photoindex.storage.IndexSettingsStore
 import app.photoindex.storage.PhotoIndexDatabase
@@ -45,7 +46,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 展示待处理张数和估价。确认后启动前台批量任务，并留在本页看进度。
- * 本节点的任务走假服务商，不连接百炼。
+ * 本节点连接千问批量接口，确认后会产生费用。
  */
 @Composable
 fun QuoteScreen(
@@ -142,7 +143,10 @@ fun QuoteScreen(
         preview.providerNote?.let { Text(text = it) }
         Text(text = "上传中的批 ${current.uploadingBatches} 个")
         Text(text = "任务${jobLabel(current.progress.jobState)}")
-        Text(text = "假服务商，不连接百炼。拿到任务号后会先保持运行中约 20 秒。")
+        Text(text = "连接千问批量接口。确认后会按估价产生费用。任务号记下之后，划掉应用再打开不会重新上传。")
+        if (!current.apiKeyPresent) {
+            Text(text = "还没有 API Key。请到设置里填写。密钥只进加密存储，没有密钥不会上传。")
+        }
         Text(text = current.progress.systemStatus)
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -175,6 +179,7 @@ fun QuoteScreen(
         Text(text = "条件不满足时可以打包，但不会上传。")
         Text(text = current.progress.notificationText, style = MaterialTheme.typography.titleMedium)
         Text(text = "数据库里已入库 ${current.progress.doneCount} 张，上传次数 ${current.progress.uploadCount}")
+        Text(text = deletedLine(current.progress.deletedRemoteFileIds))
         current.progress.batches.forEach { batch ->
             Text(text = batchLine(batch))
         }
@@ -196,7 +201,10 @@ fun QuoteScreen(
                         appIndex.access { database ->
                             try {
                                 val store = IndexSettingsStore(database)
-                                val blocked = indexStartBlockReason(store.load())
+                                val blocked = indexStartBlockReason(
+                                    store.load(),
+                                    apiKeyPresent = !KeystoreApiKeyStore(context).read().isNullOrBlank(),
+                                )
                                 if (!store.confirmed()) store.confirm()
                                 val loaded = readQuote(context, database)
                                 mainHandler.post {
@@ -245,6 +253,7 @@ private data class QuoteSnapshot(
     val settings: IndexSettings,
     val preview: QuotePreview,
     val confirmed: Boolean,
+    val apiKeyPresent: Boolean,
     val uploadingBatches: Int,
     val progress: IndexProgress,
 )
@@ -255,6 +264,7 @@ private fun readQuote(context: Context, database: PhotoIndexDatabase): QuoteSnap
         settings = store.load(),
         preview = store.preview(),
         confirmed = store.confirmed(),
+        apiKeyPresent = !KeystoreApiKeyStore(context).read().isNullOrBlank(),
         uploadingBatches = database.batchQueries.selectBatchesByState("uploading").executeAsList().size,
         progress = readIndexProgress(context, database, uploadAllowedNow(context, database)),
     )
@@ -268,6 +278,9 @@ private fun confirmationLine(snapshot: QuoteSnapshot): String = when {
     snapshot.preview.pendingCount == 0 -> "已确认。"
     else -> "已确认。点开始批量上传后才会跑。"
 }
+
+private fun deletedLine(ids: List<String>): String =
+    if (ids.isEmpty()) "还没有删除远端文件" else "已删除远端文件 ${ids.joinToString("、")}"
 
 private fun batchLine(batch: IndexBatchStatus): String {
     val task = batch.remoteBatchId ?: "还没有任务号"

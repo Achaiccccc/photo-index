@@ -4,9 +4,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.BatteryManager
-import app.photoindex.core.FakeProviderLedger
 import app.photoindex.core.uploadAllowedByConditions
-import java.io.File
 
 /**
  * T11 用手动开关代替真的拔电和断网。
@@ -42,30 +40,6 @@ fun systemLinkStatus(context: Context): String {
     val network = if (context.isOnWifi()) "Wi-Fi" else "移动网络或其他"
     val power = if (context.isCharging()) "充电中" else "未充电"
     return "系统当前是$network，$power。上传由下面两个测试开关决定。"
-}
-
-fun fakeLedgerFile(context: Context): File =
-    File(context.applicationContext.filesDir, "fake-batch-ledger.txt")
-
-class FileFakeProviderLedger(
-    private val file: File,
-) : FakeProviderLedger {
-    override fun read(): String = if (file.isFile) file.readText() else ""
-
-    override fun write(text: String) {
-        file.parentFile?.mkdirs()
-        val temporary = File(file.parentFile, "${file.name}.tmp")
-        temporary.writeText(text)
-        if (file.exists() && !file.delete()) {
-            file.writeText(text)
-            temporary.delete()
-            return
-        }
-        if (!temporary.renameTo(file)) {
-            file.writeText(text)
-            temporary.delete()
-        }
-    }
 }
 
 private fun Context.isOnWifi(): Boolean {

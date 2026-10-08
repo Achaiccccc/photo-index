@@ -21,8 +21,9 @@ internal class UrlConnectionTransport : HttpTransport {
         try {
             connection.requestMethod = request.method
             connection.instanceFollowRedirects = false
-            connection.connectTimeout = 5_000
-            connection.readTimeout = 30_000
+            // 真机上传一整份 JSONL 时，服务商收下文件可能超过 30 秒。
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 120_000
             request.headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
             val payload = when {
                 request.body != null -> request.body
