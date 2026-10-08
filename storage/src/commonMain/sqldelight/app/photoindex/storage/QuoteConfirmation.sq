@@ -1,0 +1,14 @@
+selectConfirmed:
+SELECT confirmed
+FROM quote_confirmation
+WHERE id = 1;
+
+markConfirmed:
+UPDATE quote_confirmation
+SET confirmed = 1
+WHERE id = 1;
+
+clearConfirmed:
+UPDATE quote_confirmation
+SET confirmed = 0
+WHERE id = 1;

@@ -11,6 +11,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -66,7 +67,10 @@ private val thumbnailSlots = Semaphore(4)
  * 打开时没有默认勾选。扫描只把新图写成待处理，不压缩，不上传。
  */
 @Composable
-fun ScopeScreen() {
+fun ScopeScreen(
+    onOpenSettings: () -> Unit,
+    onOpenQuote: () -> Unit,
+) {
     val context = LocalContext.current
     val sources = remember { AndroidPictureSources(context) }
     val appIndex = remember { AppIndex(context) }
@@ -210,7 +214,11 @@ fun ScopeScreen() {
                 },
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             if (!context.canReadImages()) {
                 Button(onClick = { permissionLauncher.launch(imagePermissions()) }) {
                     Text(text = "授予照片权限")
@@ -218,6 +226,12 @@ fun ScopeScreen() {
             }
             Button(onClick = { folderLauncher.launch(null) }) {
                 Text(text = "添加文件夹")
+            }
+            Button(onClick = onOpenSettings) {
+                Text(text = "设置")
+            }
+            Button(onClick = onOpenQuote) {
+                Text(text = "估价确认")
             }
         }
         LazyVerticalGrid(

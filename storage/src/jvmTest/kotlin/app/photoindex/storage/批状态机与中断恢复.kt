@@ -527,20 +527,25 @@ open class 批状态机与中断恢复 {
         compressor: ImageCompressor,
         newBatchId: () -> String,
         control: BatchRunControl = BatchRunControl(),
-    ): BatchIndexing = BatchIndexing(
-        catalog = PhotoIndexBatches(database),
-        provider = provider,
-        workspace = DirectoryBatchWorkspace(directory),
-        compressor = compressor,
-        files = DirectoryBatchFiles(directory),
-        newBatchId = newBatchId,
-        limits = BatchPackLimits(
-            maxFileBytes = 1_000_000,
-            maxLines = 10,
-            maxLineBytes = 200_000,
-        ),
-        control = control,
-    )
+        confirmed: Boolean = true,
+    ): BatchIndexing {
+        if (confirmed) database.quoteConfirmationQueries.markConfirmed()
+        else database.quoteConfirmationQueries.clearConfirmed()
+        return BatchIndexing(
+            catalog = PhotoIndexBatches(database),
+            provider = provider,
+            workspace = DirectoryBatchWorkspace(directory),
+            compressor = compressor,
+            files = DirectoryBatchFiles(directory),
+            newBatchId = newBatchId,
+            limits = BatchPackLimits(
+                maxFileBytes = 1_000_000,
+                maxLines = 10,
+                maxLineBytes = 200_000,
+            ),
+            control = control,
+        )
+    }
 
     protected fun batchIds(): () -> String {
         var number = 0

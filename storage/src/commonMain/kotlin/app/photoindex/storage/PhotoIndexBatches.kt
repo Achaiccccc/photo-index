@@ -77,6 +77,9 @@ class PhotoIndexBatches(
         database.jobQueries.updateJob(state = state, wifiOnly = job.wifiOnly, chargingOnly = job.chargingOnly)
     }
 
+    override fun quoteConfirmed(): Boolean =
+        database.quoteConfirmationQueries.selectConfirmed().executeAsOne() == 1L
+
     override fun concurrentBatches(): Int =
         database.settingQueries.selectSetting().executeAsOne().concurrentBatches.toInt()
 

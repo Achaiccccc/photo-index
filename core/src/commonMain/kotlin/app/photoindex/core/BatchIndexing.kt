@@ -22,8 +22,13 @@ class BatchIndexing(
 ) {
     private var halted = false
 
-    /** 用户确认后开始。已经在跑时再次调用，只是接着恢复。 */
+    /**
+     * 用户确认估价之后才能开始。
+     * 没有确认标记时抛出 [QuoteNotConfirmed]，不改任务状态，不打包，不上传。
+     * 已经在跑时再次调用，只是接着恢复。
+     */
     fun start() {
+        if (!catalog.quoteConfirmed()) throw QuoteNotConfirmed()
         catalog.setJobState(JobState.RUNNING)
         resume()
     }
@@ -31,11 +36,13 @@ class BatchIndexing(
     /**
      * 新进程进来时先恢复已有的批，再按任务状态决定要不要封口新批。
      * 任务不是 running 时，这里不会打包。
+     * 没有确认标记时也不封口新批；已经有任务 ID 的批仍可查询和入库。
      */
     fun resume() {
         recover()
         if (halted) return
         if (catalog.jobState() != JobState.RUNNING) return
+        if (!catalog.quoteConfirmed()) return
         while (catalog.pendingCount() > 0 && canPackAnother()) {
             val pendingBefore = catalog.pendingCount()
             val batchesBefore = catalog.batches().size
@@ -107,6 +114,7 @@ class BatchIndexing(
 
     /** 只把 failed 改回 pending。已经 done 的图留在原处，不会进新批。 */
     fun retryFailed() {
+        if (!catalog.quoteConfirmed()) throw QuoteNotConfirmed()
         catalog.requeueFailed()
         catalog.setJobState(JobState.RUNNING)
         resume()
@@ -144,6 +152,7 @@ class BatchIndexing(
         if (batch.state == BatchState.PACKING) return
         var current = batch
         if (current.remoteBatchId == null) {
+            if (!catalog.quoteConfirmed()) return
             if (!canSend()) return
             if (current.remoteFileId == null) {
                 val path = current.localPath ?: error("已封口的批 ${current.id} 没有本地文件")
@@ -493,6 +502,9 @@ interface BatchWorkspace {
 interface BatchCatalog : BatchLedger {
     fun jobState(): String
     fun setJobState(state: String)
+
+    /** 用户是否已经确认当前估价。没有确认时不能上传。 */
+    fun quoteConfirmed(): Boolean
     fun concurrentBatches(): Int
     fun packConfig(limits: BatchPackLimits): BatchPackConfig
     fun pendingSource(): PendingImageSource

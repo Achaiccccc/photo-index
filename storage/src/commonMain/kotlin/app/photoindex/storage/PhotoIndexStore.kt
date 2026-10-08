@@ -67,6 +67,8 @@ fun openPhotoIndexDatabase(name: String = ":memory:"): OpenedPhotoIndexDatabase 
     } else {
         installSearchTriggers(driver)
     }
+    // 已经打开过的库不会重跑建表。确认标记是后加的表，这里补上，默认未确认。
+    ensureQuoteConfirmation(driver)
     return OpenedPhotoIndexDatabase(
         driver = driver,
         database = PhotoIndexDatabase(driver),
@@ -84,6 +86,30 @@ private fun BundledSqlDriver.schemaUserVersion(): Long {
         0,
         null,
     ).value
+}
+
+private fun ensureQuoteConfirmation(driver: BundledSqlDriver) {
+    driver.execute(
+        null,
+        """
+        CREATE TABLE IF NOT EXISTS quote_confirmation (
+          id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
+          confirmed INTEGER NOT NULL CHECK (confirmed IN (0, 1))
+        )
+        """.trimIndent(),
+        0,
+        null,
+    )
+    driver.execute(
+        null,
+        """
+        INSERT INTO quote_confirmation (id, confirmed)
+        SELECT 1, 0
+        WHERE NOT EXISTS (SELECT 1 FROM quote_confirmation WHERE id = 1)
+        """.trimIndent(),
+        0,
+        null,
+    )
 }
 
 private fun installSearchTriggers(driver: BundledSqlDriver) {
